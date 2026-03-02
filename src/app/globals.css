@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/* ── Reset / base ────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #ffffff;
+  color: #1a1a1b;
+  /* Prevent iOS text-size-adjust on orientation change */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ── Tile flip animation ─────────────────────────────────────────────────── */
+/*
+ * The inner wrapper rotates from 0° → -180° on the X axis.
+ *
+ *  0° – 90°:  front face (white) visible, back face (coloured) hidden.
+ *  At 90°:    both faces are edge-on – nothing visible.
+ *  90° – 180°: back face becomes visible; front face hidden by backface-visibility.
+ *
+ * The animation is applied once per submitted row, staggered per tile
+ * via the `animation-delay` inline style.
+ */
+@keyframes tile-flip {
+  0%   { transform: rotateX(0deg);    }
+  100% { transform: rotateX(-180deg); }
+}
+
+/* ── Tile pop – letter entry bounce ─────────────────────────────────────── */
+@keyframes tile-pop {
+  0%   { transform: scale(1);    }
+  50%  { transform: scale(1.12); }
+  100% { transform: scale(1);    }
+}
+
+/* ── Toast fade-in / fade-out ────────────────────────────────────────────── */
+/*
+ * Both keyframes carry the full translateX(-50%) needed for horizontal
+ * centering. When a CSS animation is active it overrides the element's
+ * inline transform, so the centering offset must be baked into every
+ * keyframe stop — not left to an inline style.
+ *
+ * fade-out uses animation-fill-mode: forwards (applied at call-site) to
+ * hold opacity: 0 for the ~300 ms window between animation end and the
+ * React CLEAR_MESSAGE dispatch that actually unmounts the element.
+ */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0);    }
+}
+@keyframes fade-out {
+  from { opacity: 1; transform: translateX(-50%) translateY(0);    }
+  to   { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+}
+
+/* ── Invalid guess shake ─────────────────────────────────────────────────── */
+/*
+ * Two identical keyframe names (shake-a / shake-b) allow the animation to
+ * reliably re-trigger when the user submits two invalid guesses back-to-back.
+ * Board.tsx alternates the name via shakeKey % 2, forcing the browser to
+ * treat each new rejection as a fresh animation rather than a no-op.
+ */
+/*
+ * NYT-matched shake: 9 stops at 10% intervals → ~60ms per oscillation
+ * (vs our old 5 stops → 120ms each, which felt sluggish).
+ * Displacement peaks at ±5px in the middle third, then damps to ±1px —
+ * this "spring settling" tail is what gives the NYT shake its character.
+ */
+@keyframes shake-a {
+  0%        { transform: translateX(0);    }
+  10%, 30%  { transform: translateX(-4px); }
+  20%, 40%  { transform: translateX(4px);  }
+  50%, 70%  { transform: translateX(-5px); }
+  60%, 80%  { transform: translateX(5px);  }
+  90%       { transform: translateX(-1px); }
+  100%      { transform: translateX(0);    }
+}
+@keyframes shake-b {
+  0%        { transform: translateX(0);    }
+  10%, 30%  { transform: translateX(-4px); }
+  20%, 40%  { transform: translateX(4px);  }
+  50%, 70%  { transform: translateX(-5px); }
+  60%, 80%  { transform: translateX(5px);  }
+  90%       { transform: translateX(-1px); }
+  100%      { transform: translateX(0);    }
+}
+
+/*
+ * CSS classes to apply the shake animations.
+ * Using className toggling (not inline-style animation) is the reliable way
+ * to trigger CSS animations from React — the browser detects the class change
+ * as a definitive animation-start signal, whereas setting animation: "none"
+ * then animation: "shake-x …" in an inline style can be swallowed by React's
+ * style reconciliation in a single paint frame.
+ */
+.shake-a { animation: shake-a 600ms ease; }
+.shake-b { animation: shake-b 600ms ease; }
+
+/* ── Mobile tap highlight suppression ───────────────────────────────────── */
+button {
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+
+button:focus-visible {
+  outline: 2px solid #6aaa64;
+  outline-offset: 2px;
+}
