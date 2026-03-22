@@ -22,7 +22,6 @@ export default function GamePage() {
     revealingRow,
     shakingRow,
     shakeKey,
-    bouncingRow,
     handleKey,
     handleBackspace,
     handleSubmit,
@@ -148,7 +147,6 @@ export default function GamePage() {
             revealingRow={revealingRow}
             shakingRow={shakingRow}
             shakeKey={shakeKey}
-            bouncingRow={bouncingRow}
           />
         </div>
 

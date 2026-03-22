@@ -29,7 +29,6 @@ export interface GameState {
   revealingRow: number | null               // row index currently flip-animating
   shakingRow: number | null                 // row index currently shake-animating
   shakeKey: number                          // increments per shake → alternates animation name
-  bouncingRow: number | null               // row index currently doing the win wave animation
 }
 
 type Action =
@@ -39,7 +38,6 @@ type Action =
   | { type: "CLEAR_MESSAGE" }
   | { type: "START_FADE_MESSAGE" }
   | { type: "REVEAL_DONE" }
-  | { type: "BOUNCE_DONE" }
   | { type: "CLEAR_SHAKE" }
   | { type: "RESTART"; word: string }
   | { type: "INIT";    word: string }
@@ -62,7 +60,6 @@ function buildInitialState(): GameState {
     revealingRow: null,
     shakingRow: null,
     shakeKey: 0,
-    bouncingRow: null,
   }
 }
 
@@ -173,7 +170,6 @@ function reducer(state: GameState, action: Action): GameState {
           revealingRow: null,
           message: WIN_MESSAGES[idx],
           letterStates: newLetterStates,
-          bouncingRow: row,  // kick off the wave animation
         }
       }
       if (state.status === "lost") {
@@ -185,10 +181,6 @@ function reducer(state: GameState, action: Action): GameState {
         }
       }
       return { ...state, revealingRow: null, letterStates: newLetterStates }
-    }
-
-    case "BOUNCE_DONE": {
-      return { ...state, bouncingRow: null }
     }
 
     case "START_FADE_MESSAGE": {
@@ -278,15 +270,6 @@ export function useGame() {
     const t = setTimeout(() => dispatch({ type: "REVEAL_DONE" }), totalMs)
     return () => clearTimeout(t)
   }, [state.revealingRow])
-
-  // ── Clear bounce after wave animation completes ─────────────────────────
-  // Wave: 5 tiles × 100 ms stagger + 600 ms bounce duration + 50 ms buffer.
-  useEffect(() => {
-    if (state.bouncingRow === null) return
-    const totalMs = (WORD_LENGTH - 1) * 100 + 600 + 50
-    const t = setTimeout(() => dispatch({ type: "BOUNCE_DONE" }), totalMs)
-    return () => clearTimeout(t)
-  }, [state.bouncingRow])
 
   // ── Public API ─────────────────────────────────────────────────────────
   const handleKey = useCallback((key: string) => {

@@ -25,9 +25,6 @@ interface TileProps {
   revealDelay: number // ms
   /** true when the tile has a letter but hasn't been submitted yet */
   isFilled: boolean
-  /** true while the win-wave animation is running on this tile */
-  isBouncing: boolean
-  bounceDelay: number // ms
 }
 
 const BACK_COLORS: Record<"correct" | "present" | "absent", string> = {
@@ -36,7 +33,7 @@ const BACK_COLORS: Record<"correct" | "present" | "absent", string> = {
   absent:  "#787c7e",
 }
 
-export function Tile({ letter, evaluation, isRevealing, revealDelay, isFilled, isBouncing, bounceDelay }: TileProps) {
+export function Tile({ letter, evaluation, isRevealing, revealDelay, isFilled }: TileProps) {
   // Once a row has been revealed (evaluation set and animation complete),
   // we keep the back face permanently visible by freezing at -180 deg.
   const isRevealed = evaluation !== null && !isRevealing
@@ -57,9 +54,6 @@ export function Tile({ letter, evaluation, isRevealing, revealDelay, isFilled, i
         perspective: "250px",
         width: TILE_SIZE,
         height: TILE_SIZE,
-        animation: isBouncing
-          ? `tile-bounce 600ms ease ${bounceDelay}ms both`
-          : undefined,
       }}
       aria-label={letter || "empty"}
     >

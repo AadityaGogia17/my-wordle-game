@@ -17,14 +17,13 @@ interface BoardProps {
   revealingRow: number | null
   shakingRow: number | null
   shakeKey: number
-  bouncingRow: number | null
 }
 
 // Tile size used both here (grid row height) and in Tile.tsx (width / height).
 // Keeping the string in one place avoids drift between the two files.
 export const TILE_SIZE = "clamp(44px, 8dvh, 62px)"
 
-export function Board({ guesses, evaluations, currentInput, revealingRow, shakingRow, shakeKey, bouncingRow }: BoardProps) {
+export function Board({ guesses, evaluations, currentInput, revealingRow, shakingRow, shakeKey }: BoardProps) {
   return (
     <div
       style={{
@@ -43,7 +42,6 @@ export function Board({ guesses, evaluations, currentInput, revealingRow, shakin
         const isCurrentRow = rowIdx === guesses.length && !submittedGuess
         const isRevealing = revealingRow === rowIdx
         const isShaking = shakingRow === rowIdx
-        const isBouncing = bouncingRow === rowIdx
         // Alternate between shake-a / shake-b so the animation re-triggers
         // even when the same row is rejected twice in a row.
         const shakeName = shakeKey % 2 === 0 ? "shake-a" : "shake-b"
@@ -84,8 +82,6 @@ export function Board({ guesses, evaluations, currentInput, revealingRow, shakin
                   isRevealing={isRevealing && !!submittedGuess}
                   revealDelay={colIdx * 350}
                   isFilled={isFilled}
-                  isBouncing={isBouncing}
-                  bounceDelay={colIdx * 100}
                 />
               )
             })}
