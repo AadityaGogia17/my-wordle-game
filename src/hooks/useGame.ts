@@ -29,6 +29,7 @@ export interface GameState {
   revealingRow: number | null               // row index currently flip-animating
   shakingRow: number | null                 // row index currently shake-animating
   shakeKey: number                          // increments per shake → alternates animation name
+  bouncingRow: number | null               // row index currently doing the win wave animation
 }
 
 type Action =
@@ -38,6 +39,7 @@ type Action =
   | { type: "CLEAR_MESSAGE" }
   | { type: "START_FADE_MESSAGE" }
   | { type: "REVEAL_DONE" }
+  | { type: "BOUNCE_DONE" }
   | { type: "CLEAR_SHAKE" }
   | { type: "RESTART"; word: string }
   | { type: "INIT";    word: string }
@@ -60,6 +62,7 @@ function buildInitialState(): GameState {
     revealingRow: null,
     shakingRow: null,
     shakeKey: 0,
+    bouncingRow: null,
   }
 }
 
@@ -135,7 +138,6 @@ function reducer(state: GameState, action: Action): GameState {
       const evaluation = evaluate(guess, state.secretWord)
       const newGuesses = [...state.guesses, guess]
       const newEvaluations = [...state.evaluations, evaluation]
-      const newLetterStates = mergeLetterStates(state.letterStates, guess, evaluation)
       const rowIndex = newGuesses.length - 1
 
       const won = evaluation.every((s) => s === "correct")
@@ -146,7 +148,8 @@ function reducer(state: GameState, action: Action): GameState {
         guesses: newGuesses,
         evaluations: newEvaluations,
         currentInput: "",
-        letterStates: newLetterStates,
+        // letterStates is NOT updated here — keyboard colours are applied
+        // tile-by-tile via REVEAL_LETTER, timed to each tile's flip completion.
         revealingRow: rowIndex,
         // Status & message resolved after animation (REVEAL_DONE)
         status: won ? "won" : lost ? "lost" : "playing",
@@ -155,18 +158,37 @@ function reducer(state: GameState, action: Action): GameState {
     }
 
     case "REVEAL_DONE": {
+      // Update all keyboard colours at once — after the full row has flipped,
+      // matching the NYT behaviour where the keyboard updates as a batch.
+      const row = state.revealingRow!
+      const newLetterStates = mergeLetterStates(
+        state.letterStates,
+        state.guesses[row],
+        state.evaluations[row],
+      )
       if (state.status === "won") {
         const idx = Math.min(state.guesses.length - 1, WIN_MESSAGES.length - 1)
-        return { ...state, revealingRow: null, message: WIN_MESSAGES[idx] }
+        return {
+          ...state,
+          revealingRow: null,
+          message: WIN_MESSAGES[idx],
+          letterStates: newLetterStates,
+          bouncingRow: row,  // kick off the wave animation
+        }
       }
       if (state.status === "lost") {
         return {
           ...state,
           revealingRow: null,
           message: `The word was ${state.secretWord.toUpperCase()}`,
+          letterStates: newLetterStates,
         }
       }
-      return { ...state, revealingRow: null }
+      return { ...state, revealingRow: null, letterStates: newLetterStates }
+    }
+
+    case "BOUNCE_DONE": {
+      return { ...state, bouncingRow: null }
     }
 
     case "START_FADE_MESSAGE": {
@@ -248,13 +270,23 @@ export function useGame() {
   }, [state.shakingRow, state.shakeKey])
 
   // ── Finish animation after last tile flips ─────────────────────────────
-  // Last tile delay = (WORD_LENGTH - 1) * 100ms, animation = 500ms → ~600ms total
+  // Stagger = 350 ms/tile, flip duration = 600 ms → last tile done at
+  // (WORD_LENGTH-1)*350 + 600 ms. +50 ms buffer avoids racing the CSS.
   useEffect(() => {
     if (state.revealingRow === null) return
-    const totalMs = (WORD_LENGTH - 1) * 100 + 500 + 50 // +50ms buffer
+    const totalMs = (WORD_LENGTH - 1) * 350 + 600 + 50
     const t = setTimeout(() => dispatch({ type: "REVEAL_DONE" }), totalMs)
     return () => clearTimeout(t)
   }, [state.revealingRow])
+
+  // ── Clear bounce after wave animation completes ─────────────────────────
+  // Wave: 5 tiles × 100 ms stagger + 600 ms bounce duration + 50 ms buffer.
+  useEffect(() => {
+    if (state.bouncingRow === null) return
+    const totalMs = (WORD_LENGTH - 1) * 100 + 600 + 50
+    const t = setTimeout(() => dispatch({ type: "BOUNCE_DONE" }), totalMs)
+    return () => clearTimeout(t)
+  }, [state.bouncingRow])
 
   // ── Public API ─────────────────────────────────────────────────────────
   const handleKey = useCallback((key: string) => {
@@ -276,7 +308,7 @@ export function useGame() {
   }, [])
 
   return {
-    ...state,
+    ...state,  // includes bouncingRow
     handleKey,
     handleBackspace,
     handleSubmit,

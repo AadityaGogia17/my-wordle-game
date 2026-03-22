@@ -3,6 +3,8 @@
 // src/app/page.tsx
 // Main game page – wires useGame to all visual components.
 
+import { useEffect, useState } from "react"
+import confetti from "canvas-confetti"
 import { useGame } from "@/hooks/useGame"
 import { Board } from "@/components/Board"
 import { Keyboard } from "@/components/Keyboard"
@@ -20,11 +22,43 @@ export default function GamePage() {
     revealingRow,
     shakingRow,
     shakeKey,
+    bouncingRow,
     handleKey,
     handleBackspace,
     handleSubmit,
     handleRestart,
   } = useGame()
+
+  // Track when the Play Again button should appear.
+  const [playAgainVisible, setPlayAgainVisible] = useState(false)
+
+  // Confetti: fires when the win toast appears (REVEAL_DONE sets message).
+  useEffect(() => {
+    if (status !== "won" || !message) return
+    const end = Date.now() + 1500
+    const frame = () => {
+      confetti({ particleCount: 6, angle: 60,  spread: 55, origin: { x: 0 } })
+      confetti({ particleCount: 6, angle: 120, spread: 55, origin: { x: 1 } })
+      if (Date.now() < end) requestAnimationFrame(frame)
+    }
+    requestAnimationFrame(frame)
+  }, [status, message])
+
+  // Play Again visibility — keyed on status only so the timer is never
+  // cancelled by CLEAR_MESSAGE nulling out `message` mid-countdown.
+  // Delays are measured from SUBMIT (when status changes):
+  //   reveal animation ≈ 1750 ms, then:
+  //   won  → +1450 ms (appears as confetti winds down, ~3200 ms total)
+  //   lost → +500 ms pause after the word is shown (~2250 ms total)
+  useEffect(() => {
+    if (status === "playing") {
+      setPlayAgainVisible(false)
+      return
+    }
+    const delay = status === "won" ? 3200 : 2250
+    const t = setTimeout(() => setPlayAgainVisible(true), delay)
+    return () => clearTimeout(t)
+  }, [status])
 
   return (
     // Outer shell: exactly one viewport tall, no overflow.
@@ -114,6 +148,7 @@ export default function GamePage() {
             revealingRow={revealingRow}
             shakingRow={shakingRow}
             shakeKey={shakeKey}
+            bouncingRow={bouncingRow}
           />
         </div>
 
@@ -133,7 +168,7 @@ export default function GamePage() {
               Conditionally mounting (not just hiding) means the element
               takes no space during play, so the keyboard sits flush at the
               bottom of the bottom-section without a gap above it. */}
-          {status !== "playing" && (
+          {playAgainVisible && (
             <button
               onClick={handleRestart}
               style={{
@@ -148,6 +183,7 @@ export default function GamePage() {
                 cursor: "pointer",
                 textTransform: "uppercase",
                 transition: "all 0.15s",
+                animation: "button-fade-in 400ms ease forwards",
               }}
             >
               Play Again
