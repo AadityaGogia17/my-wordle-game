@@ -125,7 +125,7 @@ export default function GamePage() {
     // and the page scrolls naturally without any reflow.
     <div
       style={{
-        minHeight: "100dvh",
+        minHeight: "100svh",
         overflowY: "auto",
         display: "flex",
         flexDirection: "column",
@@ -172,7 +172,7 @@ export default function GamePage() {
        */}
       <main
         style={{
-          height: "calc(100dvh - 56px)",
+          height: "calc(100svh - 56px)",
           flexShrink: 0,
           display: "flex",
           flexDirection: "column",
