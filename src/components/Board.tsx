@@ -21,7 +21,7 @@ interface BoardProps {
 
 // Tile size used both here (grid row height) and in Tile.tsx (width / height).
 // Keeping the string in one place avoids drift between the two files.
-export const TILE_SIZE = "clamp(44px, 8dvh, 62px)"
+export const TILE_SIZE = "clamp(44px, 8svh, 62px)"
 
 export function Board({ guesses, evaluations, currentInput, revealingRow, shakingRow, shakeKey }: BoardProps) {
   return (

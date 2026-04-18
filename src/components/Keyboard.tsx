@@ -30,7 +30,7 @@ const KEY_COLORS: Record<"correct" | "present" | "absent", string> = {
 }
 
 // Key height shared by both regular and wide keys.
-const KEY_HEIGHT = "clamp(40px, 6dvh, 58px)"
+const KEY_HEIGHT = "clamp(40px, 6svh, 58px)"
 
 interface KeyProps {
   label: string
