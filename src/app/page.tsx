@@ -3,15 +3,17 @@
 // src/app/page.tsx
 // Main game page – wires useGame to all visual components.
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import confetti from "canvas-confetti"
 import { useGame } from "@/hooks/useGame"
 import { Board } from "@/components/Board"
 import { Keyboard } from "@/components/Keyboard"
 import { Message } from "@/components/Message"
+import { WordDefinition, type Meaning } from "@/components/WordDefinition"
 
 export default function GamePage() {
   const {
+    secretWord,
     guesses,
     evaluations,
     currentInput,
@@ -30,6 +32,13 @@ export default function GamePage() {
 
   // Track when the Play Again button should appear.
   const [playAgainVisible, setPlayAgainVisible] = useState(false)
+  const [showDefinition, setShowDefinition] = useState(false)
+  const definitionRef = useRef<HTMLDivElement>(null)
+
+  // Pre-fetched definition data — populated as soon as the game ends.
+  const [defMeanings, setDefMeanings] = useState<Meaning[] | null>(null)
+  const [defLoading, setDefLoading] = useState(false)
+  const [defError, setDefError] = useState(false)
 
   // Confetti: fires when the win toast appears (REVEAL_DONE sets message).
   useEffect(() => {
@@ -52,24 +61,76 @@ export default function GamePage() {
   useEffect(() => {
     if (status === "playing") {
       setPlayAgainVisible(false)
+      setShowDefinition(false)
+      setDefMeanings(null)
+      setDefLoading(false)
+      setDefError(false)
       return
+    }
+
+    // Pre-fetch definition as soon as the game ends.
+    if (secretWord) {
+      setDefLoading(true)
+      setDefError(false)
+      setDefMeanings(null)
+      fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${secretWord}`)
+        .then((r) => { if (!r.ok) throw new Error(); return r.json() })
+        .then((data) => {
+          const results: Meaning[] = []
+          for (const entry of data) {
+            for (const m of entry.meanings ?? []) {
+              const def = m.definitions?.[0]?.definition
+              if (def && results.length < 3) results.push({ partOfSpeech: m.partOfSpeech, definition: def })
+            }
+          }
+          setDefMeanings(results.length ? results : null)
+          if (!results.length) setDefError(true)
+        })
+        .catch(() => setDefError(true))
+        .finally(() => setDefLoading(false))
     }
     const delay = status === "won" ? 3200 : 2250
     const t = setTimeout(() => setPlayAgainVisible(true), delay)
     return () => clearTimeout(t)
   }, [status])
 
+  // Custom eased scroll — scrolls so the bottom of the definition is fully visible.
+  // Uses easeInOutCubic over 900 ms for a smooth glide.
+  const scrollToDefinition = () => {
+    const el = definitionRef.current
+    if (!el) return
+    const targetY = el.getBoundingClientRect().bottom + window.scrollY - window.innerHeight + 16
+    const startY = window.scrollY
+    const distance = targetY - startY
+    if (distance <= 0) return
+    const duration = 900
+    const startTime = performance.now()
+    const step = (now: number) => {
+      const t = Math.min((now - startTime) / duration, 1)
+      const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+      window.scrollTo(0, startY + distance * ease)
+      if (t < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }
+
+  useEffect(() => {
+    if (showDefinition) scrollToDefinition()
+  }, [showDefinition])
+
   return (
-    // Outer shell: exactly one viewport tall, no overflow.
-    // alignItems: center handles horizontal centering of header + main.
+    // Outer shell: always min-height viewport, scrollable. During play there is
+    // nothing below the keyboard so no scrollbar appears — layout is identical
+    // to height: 100dvh. When the definition panel is shown it extends below
+    // and the page scrolls naturally without any reflow.
     <div
       style={{
-        height: "100dvh",
+        minHeight: "100dvh",
+        overflowY: "auto",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         backgroundColor: "#fff",
-        overflow: "hidden",
       }}
     >
       {/* ── Toast message (fixed, outside flow) ────────────────────────── */}
@@ -111,8 +172,8 @@ export default function GamePage() {
        */}
       <main
         style={{
-          flex: 1,
-          minHeight: 0,
+          height: "calc(100dvh - 56px)",
+          flexShrink: 0,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -158,34 +219,62 @@ export default function GamePage() {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            gap: 8,
+            gap: 12,
             paddingTop: 8,
           }}
         >
-          {/* Restart button — only rendered after win or loss.
-              Conditionally mounting (not just hiding) means the element
-              takes no space during play, so the keyboard sits flush at the
-              bottom of the bottom-section without a gap above it. */}
+          {/* End-game buttons — only rendered after win or loss. */}
           {playAgainVisible && (
-            <button
-              onClick={handleRestart}
+            <div
               style={{
-                padding: "10px 24px",
-                borderRadius: 4,
-                border: "2px solid #1a1a1b",
-                backgroundColor: "#1a1a1b",
-                color: "#fff",
-                fontWeight: 700,
-                fontSize: "0.9rem",
-                letterSpacing: "0.08em",
-                cursor: "pointer",
-                textTransform: "uppercase",
-                transition: "all 0.15s",
+                display: "flex",
+                gap: 10,
                 animation: "button-fade-in 400ms ease forwards",
               }}
             >
-              Play Again
-            </button>
+              <button
+                onClick={handleRestart}
+                style={{
+                  padding: "10px 24px",
+                  borderRadius: 4,
+                  border: "2px solid #6aaa64",
+                  backgroundColor: "#fff",
+                  color: "#6aaa64",
+                  fontWeight: 700,
+                  fontSize: "0.9rem",
+                  letterSpacing: "0.08em",
+                  cursor: "pointer",
+                  textTransform: "uppercase",
+                  transition: "all 0.15s",
+                }}
+              >
+                Play Again
+              </button>
+              <button
+                onClick={() => {
+                  if (!showDefinition) {
+                    setShowDefinition(true)
+                  } else {
+                    scrollToDefinition()
+                  }
+                }}
+                style={{
+                  padding: "10px 24px",
+                  borderRadius: 4,
+                  border: "2px solid #6aaa64",
+                  backgroundColor: "#6aaa64",
+                  color: "#fff",
+                  fontWeight: 700,
+                  fontSize: "0.9rem",
+                  letterSpacing: "0.08em",
+                  cursor: "pointer",
+                  textTransform: "uppercase",
+                  transition: "all 0.15s",
+                }}
+              >
+                Explain Word
+              </button>
+            </div>
           )}
 
           {/* Keyboard */}
@@ -197,6 +286,26 @@ export default function GamePage() {
           />
         </div>
       </main>
+
+      {/* Definition panel — outside main so it never affects the clipped layout above. */}
+      {showDefinition && secretWord && (
+        <div
+          ref={definitionRef}
+          style={{
+            width: "100%",
+            maxWidth: 500,
+            padding: "0 8px 16px",
+            boxSizing: "border-box",
+          }}
+        >
+          <WordDefinition
+            word={secretWord}
+            meanings={defMeanings}
+            loading={defLoading}
+            error={defError}
+          />
+        </div>
+      )}
     </div>
   )
 }
