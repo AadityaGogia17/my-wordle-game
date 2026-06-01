@@ -160,7 +160,7 @@ export default function GamePage() {
             userSelect: "none",
           }}
         >
-          Wordl
+          Bundl
         </h1>
       </header>
 

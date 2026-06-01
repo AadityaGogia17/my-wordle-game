@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Wordl",
+  title: "Bundl",
   description: "A Wordle-style word guessing game. Guess the 5-letter word in 6 tries.",
   icons: {
     icon: "/favicon.ico",
