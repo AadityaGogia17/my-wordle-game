@@ -32,10 +32,9 @@ export default function GamePage() {
 
   // Track when the Play Again button should appear.
   const [playAgainVisible, setPlayAgainVisible] = useState(false)
-  const [showDefinition, setShowDefinition] = useState(false)
+  const [definitionWord, setDefinitionWord] = useState<string | null>(null)
   const definitionRef = useRef<HTMLDivElement>(null)
 
-  // Pre-fetched definition data — populated as soon as the game ends.
   const [defMeanings, setDefMeanings] = useState<Meaning[] | null>(null)
   const [defLoading, setDefLoading] = useState(false)
   const [defError, setDefError] = useState(false)
@@ -61,38 +60,40 @@ export default function GamePage() {
   useEffect(() => {
     if (status === "playing") {
       setPlayAgainVisible(false)
-      setShowDefinition(false)
-      setDefMeanings(null)
-      setDefLoading(false)
-      setDefError(false)
+      setDefinitionWord(null)
       return
-    }
-
-    // Pre-fetch definition as soon as the game ends.
-    if (secretWord) {
-      setDefLoading(true)
-      setDefError(false)
-      setDefMeanings(null)
-      fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${secretWord}`)
-        .then((r) => { if (!r.ok) throw new Error(); return r.json() })
-        .then((data) => {
-          const results: Meaning[] = []
-          for (const entry of data) {
-            for (const m of entry.meanings ?? []) {
-              const def = m.definitions?.[0]?.definition
-              if (def && results.length < 3) results.push({ partOfSpeech: m.partOfSpeech, definition: def })
-            }
-          }
-          setDefMeanings(results.length ? results : null)
-          if (!results.length) setDefError(true)
-        })
-        .catch(() => setDefError(true))
-        .finally(() => setDefLoading(false))
     }
     const delay = status === "won" ? 3200 : 2250
     const t = setTimeout(() => setPlayAgainVisible(true), delay)
     return () => clearTimeout(t)
   }, [status])
+
+  // Fetch definition whenever the user picks a word to explain.
+  // The cleanup cancels stale responses if the user switches words quickly.
+  useEffect(() => {
+    if (!definitionWord) return
+    let cancelled = false
+    setDefLoading(true)
+    setDefError(false)
+    setDefMeanings(null)
+    fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${definitionWord}`)
+      .then((r) => { if (!r.ok) throw new Error(); return r.json() })
+      .then((data) => {
+        if (cancelled) return
+        const results: Meaning[] = []
+        for (const entry of data) {
+          for (const m of entry.meanings ?? []) {
+            const def = m.definitions?.[0]?.definition
+            if (def && results.length < 3) results.push({ partOfSpeech: m.partOfSpeech, definition: def })
+          }
+        }
+        setDefMeanings(results.length ? results : null)
+        if (!results.length) setDefError(true)
+      })
+      .catch(() => { if (!cancelled) setDefError(true) })
+      .finally(() => { if (!cancelled) setDefLoading(false) })
+    return () => { cancelled = true }
+  }, [definitionWord])
 
   // Custom eased scroll — scrolls so the bottom of the definition is fully visible.
   // Uses easeInOutCubic over 900 ms for a smooth glide.
@@ -115,8 +116,8 @@ export default function GamePage() {
   }
 
   useEffect(() => {
-    if (showDefinition) scrollToDefinition()
-  }, [showDefinition])
+    if (definitionWord) scrollToDefinition()
+  }, [definitionWord])
 
   return (
     // Outer shell: always min-height viewport, scrollable. During play there is
@@ -208,6 +209,13 @@ export default function GamePage() {
             revealingRow={revealingRow}
             shakingRow={shakingRow}
             shakeKey={shakeKey}
+            onGuessClick={(word) => {
+              if (definitionWord === word) {
+                scrollToDefinition()
+              } else {
+                setDefinitionWord(word)
+              }
+            }}
           />
         </div>
 
@@ -252,8 +260,8 @@ export default function GamePage() {
               </button>
               <button
                 onClick={() => {
-                  if (!showDefinition) {
-                    setShowDefinition(true)
+                  if (definitionWord !== secretWord) {
+                    setDefinitionWord(secretWord)
                   } else {
                     scrollToDefinition()
                   }
@@ -288,7 +296,7 @@ export default function GamePage() {
       </main>
 
       {/* Definition panel — outside main so it never affects the clipped layout above. */}
-      {showDefinition && secretWord && (
+      {definitionWord && (
         <div
           ref={definitionRef}
           style={{
@@ -299,7 +307,7 @@ export default function GamePage() {
           }}
         >
           <WordDefinition
-            word={secretWord}
+            word={definitionWord}
             meanings={defMeanings}
             loading={defLoading}
             error={defError}

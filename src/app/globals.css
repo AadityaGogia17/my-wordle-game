@@ -110,6 +110,16 @@ body {
   to   { opacity: 1; transform: translateY(0);   }
 }
 
+/* ── Clickable guess row ─────────────────────────────────────────────────── */
+.guess-row-clickable {
+  cursor: pointer;
+  border-radius: 3px;
+  transition: opacity 0.1s;
+}
+.guess-row-clickable:hover {
+  opacity: 0.75;
+}
+
 /* ── Mobile tap highlight suppression ───────────────────────────────────── */
 button {
   -webkit-tap-highlight-color: transparent;

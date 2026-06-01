@@ -17,13 +17,14 @@ interface BoardProps {
   revealingRow: number | null
   shakingRow: number | null
   shakeKey: number
+  onGuessClick?: (word: string) => void
 }
 
 // Tile size used both here (grid row height) and in Tile.tsx (width / height).
 // Keeping the string in one place avoids drift between the two files.
 export const TILE_SIZE = "clamp(44px, 8svh, 62px)"
 
-export function Board({ guesses, evaluations, currentInput, revealingRow, shakingRow, shakeKey }: BoardProps) {
+export function Board({ guesses, evaluations, currentInput, revealingRow, shakingRow, shakeKey, onGuessClick }: BoardProps) {
   return (
     <div
       style={{
@@ -49,12 +50,16 @@ export function Board({ guesses, evaluations, currentInput, revealingRow, shakin
         return (
           <div
             key={rowIdx}
-            // className drives the shake animation (not inline style).
-            // Toggling a CSS class is the reliable way to trigger a CSS
-            // animation from React — the browser always sees it as a fresh
-            // animation-start, whereas toggling animation: "none" ↔ value
-            // in an inline style can be missed in a single paint frame.
-            className={isShaking ? shakeName : undefined}
+            className={
+              isShaking ? shakeName :
+              (submittedGuess && !isRevealing && onGuessClick) ? "guess-row-clickable" :
+              undefined
+            }
+            onClick={
+              submittedGuess && !isRevealing && onGuessClick
+                ? () => onGuessClick(submittedGuess)
+                : undefined
+            }
             style={{ display: "flex", gap: 5 }}
           >
             {Array.from({ length: WORD_LENGTH }, (_, colIdx) => {
