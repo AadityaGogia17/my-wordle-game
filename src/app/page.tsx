@@ -3,7 +3,7 @@
 // src/app/page.tsx
 // Main game page – mode selection screen, then wires useGame to all visual components.
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import confetti from "canvas-confetti"
 import { useGame } from "@/hooks/useGame"
 import { Board } from "@/components/Board"
@@ -126,6 +126,26 @@ function Game({
   const [defLoading, setDefLoading] = useState(false)
   const [defError, setDefError] = useState(false)
 
+  // Definition cache — keyed by word, populated by background pre-fetches.
+  // A ref (not state) so background fetches never trigger re-renders; the
+  // display states (defMeanings/defLoading/defError) still drive the UI.
+  const defCache = useRef<Record<string, { meanings: Meaning[] | null; error: boolean }>>({})
+
+  // Pre-fetch a word silently and store in cache. No-ops if already cached.
+  const prefetch = useCallback((word: string) => {
+    if (!word || defCache.current[word] !== undefined) return
+    // Mark as in-flight with a sentinel so concurrent calls don't double-fetch
+    defCache.current[word] = { meanings: null, error: false }
+    fetch(`/api/define/${word}`)
+      .then((r) => { if (!r.ok) throw new Error(); return r.json() })
+      .then((data) => {
+        defCache.current[word] = { meanings: data.meanings ?? null, error: !data.meanings }
+      })
+      .catch(() => {
+        defCache.current[word] = { meanings: null, error: true }
+      })
+  }, [])
+
   // Confetti: fires when the win toast appears (REVEAL_DONE sets message).
   useEffect(() => {
     if (status !== "won" || !message) return
@@ -155,11 +175,34 @@ function Game({
     return () => clearTimeout(t)
   }, [status, wordLength])
 
+  // Background pre-fetch: kick off a silent fetch for each submitted guess so
+  // definitions are ready in cache before the user taps a row.
+  useEffect(() => {
+    for (const word of guesses) prefetch(word)
+  }, [guesses, prefetch])
+
+  // Also pre-fetch the secret word as soon as it's known so "Explain Word"
+  // shows instantly after the game ends.
+  useEffect(() => {
+    prefetch(secretWord)
+  }, [secretWord, prefetch])
+
   // Fetch definition whenever the user picks a word to explain.
-  // Calls our API route which tries dictionaryapi.dev then falls back to Merriam-Webster.
-  // The cleanup cancels stale responses if the user switches words quickly.
+  // Checks the cache first — if the background fetch already finished the
+  // result shows instantly. Falls back to a live fetch if not yet cached.
   useEffect(() => {
     if (!definitionWord) return
+
+    const cached = defCache.current[definitionWord]
+    // Cache hit with a real result (not the in-flight sentinel)
+    if (cached !== undefined && (cached.meanings !== null || cached.error)) {
+      setDefMeanings(cached.meanings)
+      setDefError(cached.error)
+      setDefLoading(false)
+      return
+    }
+
+    // Not cached yet — fetch now
     let cancelled = false
     setDefLoading(true)
     setDefError(false)
@@ -168,14 +211,17 @@ function Game({
       .then((r) => { if (!r.ok) throw new Error(); return r.json() })
       .then((data) => {
         if (cancelled) return
-        if (data.meanings) {
-          setDefMeanings(data.meanings)
-        } else {
-          setDefMeanings(null)
+        const result = { meanings: data.meanings ?? null, error: !data.meanings }
+        defCache.current[definitionWord] = result
+        setDefMeanings(result.meanings)
+        setDefError(result.error)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          defCache.current[definitionWord] = { meanings: null, error: true }
           setDefError(true)
         }
       })
-      .catch(() => { if (!cancelled) setDefError(true) })
       .finally(() => { if (!cancelled) setDefLoading(false) })
     return () => { cancelled = true }
   }, [definitionWord])
