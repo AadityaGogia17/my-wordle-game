@@ -5,19 +5,19 @@
 
 import { useCallback, useEffect, useReducer } from "react"
 import { evaluate, TileState } from "@/lib/evaluate"
-import { ALLOWED } from "@/lib/words/allowed"
+import { getAllowed } from "@/lib/words/allowed"
 import { selectWord } from "@/lib/wordSelect"
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
 export const MAX_GUESSES = 6
-export const WORD_LENGTH = 5
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type GameStatus = "playing" | "won" | "lost"
 
 export interface GameState {
+  wordLength: number
   secretWord: string
   guesses: string[]                          // submitted guesses
   evaluations: ("correct" | "present" | "absent")[][] // per row
@@ -44,11 +44,12 @@ type Action =
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function buildInitialState(): GameState {
+function buildInitialState(wordLength: number): GameState {
   // secretWord starts empty – it is set client-side via the INIT action
   // (useEffect) to avoid an SSR/client hydration mismatch caused by
   // selectWord() producing a different random result on server vs browser.
   return {
+    wordLength,
     secretWord: "",
     guesses: [],
     evaluations: [],
@@ -92,7 +93,7 @@ function reducer(state: GameState, action: Action): GameState {
     case "KEY": {
       if (state.status !== "playing") return state
       if (state.revealingRow !== null) return state // lock input during animation
-      if (state.currentInput.length >= WORD_LENGTH) return state
+      if (state.currentInput.length >= state.wordLength) return state
       return { ...state, currentInput: state.currentInput + action.key }
     }
 
@@ -104,7 +105,7 @@ function reducer(state: GameState, action: Action): GameState {
 
     case "INIT": {
       // Called once after hydration to set the first secret word.
-      return { ...buildInitialState(), secretWord: action.word }
+      return { ...buildInitialState(state.wordLength), secretWord: action.word }
     }
 
     case "SUBMIT": {
@@ -114,7 +115,7 @@ function reducer(state: GameState, action: Action): GameState {
 
       const guess = state.currentInput.toLowerCase()
 
-      if (guess.length < WORD_LENGTH) {
+      if (guess.length < state.wordLength) {
         return {
           ...state,
           message: "Not enough letters",
@@ -123,7 +124,7 @@ function reducer(state: GameState, action: Action): GameState {
         }
       }
 
-      if (!ALLOWED.has(guess)) {
+      if (!getAllowed(state.wordLength).has(guess)) {
         return {
           ...state,
           message: "Not in word list",
@@ -199,7 +200,7 @@ function reducer(state: GameState, action: Action): GameState {
 
     case "RESTART": {
       // word is provided by the hook so selectWord() runs client-side only.
-      return { ...buildInitialState(), secretWord: action.word }
+      return { ...buildInitialState(state.wordLength), secretWord: action.word }
     }
 
     default:
@@ -209,12 +210,14 @@ function reducer(state: GameState, action: Action): GameState {
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 
-export function useGame() {
-  const [state, dispatch] = useReducer(reducer, undefined, buildInitialState)
+export function useGame(wordLength: number) {
+  const [state, dispatch] = useReducer(reducer, undefined, () => buildInitialState(wordLength))
 
   // ── Client-side word initialisation (avoids SSR/hydration mismatch) ───
   useEffect(() => {
-    dispatch({ type: "INIT", word: selectWord() })
+    dispatch({ type: "INIT", word: selectWord(wordLength) })
+  // wordLength is fixed for the lifetime of this hook instance.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ── Physical keyboard ──────────────────────────────────────────────────
@@ -263,13 +266,13 @@ export function useGame() {
 
   // ── Finish animation after last tile flips ─────────────────────────────
   // Stagger = 350 ms/tile, flip duration = 600 ms → last tile done at
-  // (WORD_LENGTH-1)*350 + 600 ms. +50 ms buffer avoids racing the CSS.
+  // (wordLength-1)*350 + 600 ms. +50 ms buffer avoids racing the CSS.
   useEffect(() => {
     if (state.revealingRow === null) return
-    const totalMs = (WORD_LENGTH - 1) * 350 + 600 + 50
+    const totalMs = (state.wordLength - 1) * 350 + 600 + 50
     const t = setTimeout(() => dispatch({ type: "REVEAL_DONE" }), totalMs)
     return () => clearTimeout(t)
-  }, [state.revealingRow])
+  }, [state.revealingRow, state.wordLength])
 
   // ── Public API ─────────────────────────────────────────────────────────
   const handleKey = useCallback((key: string) => {
@@ -287,8 +290,8 @@ export function useGame() {
   const handleRestart = useCallback(() => {
     // selectWord() is called here (hook level, always client-side) so the
     // reducer stays pure and SSR never touches word-selection logic.
-    dispatch({ type: "RESTART", word: selectWord() })
-  }, [])
+    dispatch({ type: "RESTART", word: selectWord(state.wordLength) })
+  }, [state.wordLength])
 
   return {
     ...state,  // includes bouncingRow

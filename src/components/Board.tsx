@@ -8,9 +8,10 @@
 // is fit-content so it naturally hugs exactly 5 tiles + 4 gaps.
 
 import { Tile } from "./Tile"
-import { WORD_LENGTH, MAX_GUESSES } from "@/hooks/useGame"
+import { MAX_GUESSES } from "@/hooks/useGame"
 
 interface BoardProps {
+  wordLength: number
   guesses: string[]
   evaluations: ("correct" | "present" | "absent")[][]
   currentInput: string
@@ -20,17 +21,23 @@ interface BoardProps {
   onGuessClick?: (word: string) => void
 }
 
-// Tile size used both here (grid row height) and in Tile.tsx (width / height).
-// Keeping the string in one place avoids drift between the two files.
-export const TILE_SIZE = "clamp(44px, 8svh, 62px)"
+// Tile size: height-based clamp capped further by available width so 6 tiles
+// never overflow a narrow screen.  The formula reserves 16px horizontal page
+// padding and (wordLength-1)*5px for inter-tile gaps.
+// min() picks the smaller of the height-driven size and the width-driven limit.
+export function getTileSize(wordLength: number): string {
+  const gapTotal = (wordLength - 1) * 5
+  return `min(clamp(44px, 8svh, 62px), calc((min(100vw, 500px) - 16px - ${gapTotal}px) / ${wordLength}))`
+}
 
-export function Board({ guesses, evaluations, currentInput, revealingRow, shakingRow, shakeKey, onGuessClick }: BoardProps) {
+export function Board({ wordLength, guesses, evaluations, currentInput, revealingRow, shakingRow, shakeKey, onGuessClick }: BoardProps) {
+  const tileSize = getTileSize(wordLength)
   return (
     <div
       style={{
         display: "grid",
-        // Row height scales with viewport height, capped at the original 62 px.
-        gridTemplateRows: `repeat(${MAX_GUESSES}, ${TILE_SIZE})`,
+        // Row height scales with viewport height, width-capped for 6-letter boards.
+        gridTemplateRows: `repeat(${MAX_GUESSES}, ${tileSize})`,
         gap: 5,
         // width is derived from tile content so it always hugs the tiles exactly.
         width: "fit-content",
@@ -62,7 +69,7 @@ export function Board({ guesses, evaluations, currentInput, revealingRow, shakin
             }
             style={{ display: "flex", gap: 5 }}
           >
-            {Array.from({ length: WORD_LENGTH }, (_, colIdx) => {
+            {Array.from({ length: wordLength }, (_, colIdx) => {
               let letter = ""
               let evalState: "correct" | "present" | "absent" | null = null
               let isFilled = false
@@ -87,6 +94,7 @@ export function Board({ guesses, evaluations, currentInput, revealingRow, shakin
                   isRevealing={isRevealing && !!submittedGuess}
                   revealDelay={colIdx * 350}
                   isFilled={isFilled}
+                  size={tileSize}
                 />
               )
             })}

@@ -14,8 +14,6 @@
 // Sizing: width and height both use the same TILE_SIZE clamp imported from
 // Board.tsx so the tile is always square and always matches the grid row height.
 
-import { TILE_SIZE } from "./Board"
-
 interface TileProps {
   letter: string
   /** null = not yet evaluated (current-input or empty row) */
@@ -25,6 +23,8 @@ interface TileProps {
   revealDelay: number // ms
   /** true when the tile has a letter but hasn't been submitted yet */
   isFilled: boolean
+  /** CSS size string from getTileSize() – width and height (square tile) */
+  size: string
 }
 
 const BACK_COLORS: Record<"correct" | "present" | "absent", string> = {
@@ -33,7 +33,7 @@ const BACK_COLORS: Record<"correct" | "present" | "absent", string> = {
   absent:  "#787c7e",
 }
 
-export function Tile({ letter, evaluation, isRevealing, revealDelay, isFilled }: TileProps) {
+export function Tile({ letter, evaluation, isRevealing, revealDelay, isFilled, size }: TileProps) {
   // Once a row has been revealed (evaluation set and animation complete),
   // we keep the back face permanently visible by freezing at -180 deg.
   const isRevealed = evaluation !== null && !isRevealing
@@ -52,8 +52,8 @@ export function Tile({ letter, evaluation, isRevealing, revealDelay, isFilled }:
     <div
       style={{
         perspective: "250px",
-        width: TILE_SIZE,
-        height: TILE_SIZE,
+        width: size,
+        height: size,
       }}
       aria-label={letter || "empty"}
     >

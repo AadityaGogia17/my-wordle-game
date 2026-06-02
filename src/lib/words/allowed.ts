@@ -12,5 +12,12 @@
 
 import { ANSWERS } from "./answers"
 import WORD_LIST from "./allowed-list.json"
+import { ALLOWED6 } from "./allowed6"
+import { BLACKLIST } from "./blacklist"
 
-export const ALLOWED = new Set([...WORD_LIST, ...ANSWERS])
+export const ALLOWED = new Set([...WORD_LIST, ...ANSWERS].filter((w) => !BLACKLIST.has(w)))
+
+/** Return the correct validation set for a given word length. */
+export function getAllowed(wordLength: number): Set<string> {
+  return wordLength === 6 ? ALLOWED6 : ALLOWED
+}

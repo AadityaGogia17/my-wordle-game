@@ -5,7 +5,7 @@
 export type TileState = "correct" | "present" | "absent" | "empty" | "active"
 
 /**
- * Evaluate a 5-letter guess against a 5-letter secret.
+ * Evaluate a guess against a secret word of the same length.
  *
  * Pass 1 – exact matches (green).
  *   Each exact-match letter is removed from the remaining pool so it
@@ -39,7 +39,7 @@ export function evaluate(
   guess: string,
   secret: string
 ): ("correct" | "present" | "absent")[] {
-  const result: ("correct" | "present" | "absent")[] = Array(5).fill("absent")
+  const result: ("correct" | "present" | "absent")[] = Array(guess.length).fill("absent")
 
   // Build a mutable frequency map of the secret letters.
   const pool: Record<string, number> = {}
@@ -48,7 +48,7 @@ export function evaluate(
   }
 
   // ── Pass 1: exact matches (green) ──────────────────────────────────────
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < guess.length; i++) {
     if (guess[i] === secret[i]) {
       result[i] = "correct"
       pool[guess[i]]-- // consume this letter from the available pool
@@ -56,7 +56,7 @@ export function evaluate(
   }
 
   // ── Pass 2: present-but-wrong-position (yellow) ────────────────────────
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < guess.length; i++) {
     if (result[i] === "correct") continue // already handled
     const remaining = pool[guess[i]] ?? 0
     if (remaining > 0) {

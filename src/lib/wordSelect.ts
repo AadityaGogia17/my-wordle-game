@@ -9,16 +9,18 @@
 //   5. Persist the chosen word so it won't be chosen again this cycle.
 
 import { ANSWERS } from "./words/answers"
+import { ANSWERS6 } from "./words/answers6"
 import { getUsedWords, markWordUsed, resetUsedWords } from "./storage"
 
-export function selectWord(): string {
-  const used = getUsedWords()
-  let pool = ANSWERS.filter((w) => !used.has(w))
+export function selectWord(wordLength: number): string {
+  const answerPool = wordLength === 6 ? ANSWERS6 : ANSWERS
+  const used = getUsedWords(wordLength)
+  let pool = answerPool.filter((w) => !used.has(w))
 
   // Full cycle complete – start fresh
   if (pool.length === 0) {
-    resetUsedWords()
-    pool = [...ANSWERS]
+    resetUsedWords(wordLength)
+    pool = [...answerPool]
   }
 
   // Unpredictable random index
@@ -28,6 +30,6 @@ export function selectWord(): string {
       : Math.floor(Math.random() * pool.length)
 
   const word = pool[idx]
-  markWordUsed(word)
+  markWordUsed(word, wordLength)
   return word
 }

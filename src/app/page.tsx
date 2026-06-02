@@ -1,7 +1,7 @@
 "use client"
 
 // src/app/page.tsx
-// Main game page – wires useGame to all visual components.
+// Main game page – mode selection screen, then wires useGame to all visual components.
 
 import { useEffect, useRef, useState } from "react"
 import confetti from "canvas-confetti"
@@ -11,7 +11,95 @@ import { Keyboard } from "@/components/Keyboard"
 import { Message } from "@/components/Message"
 import { WordDefinition, type Meaning } from "@/components/WordDefinition"
 
-export default function GamePage() {
+// ── Mode Selection Screen ──────────────────────────────────────────────────
+
+function ModeSelect({ onSelect }: { onSelect: (mode: 5 | 6) => void }) {
+  const [selected, setSelected] = useState<5 | 6 | null>(null)
+
+  return (
+    <main
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 24,
+        padding: "0 24px 40px",
+        width: "100%",
+        maxWidth: 500,
+        boxSizing: "border-box",
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          color: "#787c7e",
+          fontSize: "0.95rem",
+          letterSpacing: "0.05em",
+        }}
+      >
+        Choose your game mode
+      </p>
+
+      {/* Mode option buttons */}
+      <div style={{ display: "flex", gap: 16, width: "100%" }}>
+        {([5, 6] as const).map((n) => (
+          <button
+            key={n}
+            onClick={() => setSelected(n)}
+            style={{
+              flex: 1,
+              padding: "20px 0",
+              borderRadius: 8,
+              border: `2px solid ${selected === n ? "#6aaa64" : "#d3d6da"}`,
+              backgroundColor: "#fff",
+              color: selected === n ? "#6aaa64" : "#1a1a1b",
+              fontWeight: 700,
+              fontSize: "1.1rem",
+              letterSpacing: "0.08em",
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            {n} Letters
+          </button>
+        ))}
+      </div>
+
+      {/* Play button – disabled until a mode is selected */}
+      <button
+        disabled={selected === null}
+        onClick={() => selected !== null && onSelect(selected)}
+        style={{
+          padding: "12px 40px",
+          borderRadius: 4,
+          border: "none",
+          backgroundColor: selected !== null ? "#6aaa64" : "#d3d6da",
+          color: "#fff",
+          fontWeight: 700,
+          fontSize: "1rem",
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          cursor: selected !== null ? "pointer" : "default",
+          transition: "background-color 0.15s",
+        }}
+      >
+        Play
+      </button>
+    </main>
+  )
+}
+
+// ── Game ──────────────────────────────────────────────────────────────────────
+
+function Game({
+  wordLength,
+  onChangeMode,
+}: {
+  wordLength: 5 | 6
+  onChangeMode: () => void
+}) {
   const {
     secretWord,
     guesses,
@@ -28,9 +116,8 @@ export default function GamePage() {
     handleBackspace,
     handleSubmit,
     handleRestart,
-  } = useGame()
+  } = useGame(wordLength)
 
-  // Track when the Play Again button should appear.
   const [playAgainVisible, setPlayAgainVisible] = useState(false)
   const [definitionWord, setDefinitionWord] = useState<string | null>(null)
   const definitionRef = useRef<HTMLDivElement>(null)
@@ -51,22 +138,22 @@ export default function GamePage() {
     requestAnimationFrame(frame)
   }, [status, message])
 
-  // Play Again visibility — keyed on status only so the timer is never
-  // cancelled by CLEAR_MESSAGE nulling out `message` mid-countdown.
-  // Delays are measured from SUBMIT (when status changes):
-  //   reveal animation ≈ 1750 ms, then:
-  //   won  → +1450 ms (appears as confetti winds down, ~3200 ms total)
-  //   lost → +500 ms pause after the word is shown (~2250 ms total)
+  // Play Again visibility — delays computed from wordLength to account for longer
+  // 6-letter reveal animation.  revealDoneMs mirrors the REVEAL_DONE timer in
+  // useGame.ts: (wordLength-1)*350 + 600 + 50 ms after SUBMIT.
   useEffect(() => {
     if (status === "playing") {
       setPlayAgainVisible(false)
       setDefinitionWord(null)
       return
     }
-    const delay = status === "won" ? 3200 : 2250
+    const revealDoneMs = (wordLength - 1) * 350 + 600 + 50
+    // won: buttons appear as confetti winds down (+1150 ms after REVEAL_DONE)
+    // lost: short pause after the secret word is shown (+200 ms)
+    const delay = status === "won" ? revealDoneMs + 1150 : revealDoneMs + 200
     const t = setTimeout(() => setPlayAgainVisible(true), delay)
     return () => clearTimeout(t)
-  }, [status])
+  }, [status, wordLength])
 
   // Fetch definition whenever the user picks a word to explain.
   // Calls our API route which tries dictionaryapi.dev then falls back to Merriam-Webster.
@@ -94,7 +181,6 @@ export default function GamePage() {
   }, [definitionWord])
 
   // Custom eased scroll — scrolls so the bottom of the definition is fully visible.
-  // Uses easeInOutCubic over 900 ms for a smooth glide.
   const scrollToDefinition = () => {
     const el = definitionRef.current
     if (!el) return
@@ -118,56 +204,15 @@ export default function GamePage() {
   }, [definitionWord])
 
   return (
-    // Outer shell: always min-height viewport, scrollable. During play there is
-    // nothing below the keyboard so no scrollbar appears — layout is identical
-    // to height: 100dvh. When the definition panel is shown it extends below
-    // and the page scrolls naturally without any reflow.
-    <div
-      style={{
-        minHeight: "100svh",
-        overflowY: "auto",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        backgroundColor: "#fff",
-      }}
-    >
-      {/* ── Toast message (fixed, outside flow) ────────────────────────── */}
+    <>
+      {/* ── Toast message (fixed, outside flow) ──────────────────────────── */}
       <Message message={message} fadingOut={messageFadingOut} />
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header
-        style={{
-          width: "100%",
-          borderBottom: "1px solid #d3d6da",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "0 16px",
-          height: 56,
-          flexShrink: 0,
-        }}
-      >
-        <h1
-          style={{
-            fontSize: "1.8rem",
-            fontWeight: 700,
-            letterSpacing: "0.2em",
-            textTransform: "uppercase",
-            color: "#1a1a1b",
-            margin: 0,
-            userSelect: "none",
-          }}
-        >
-          Bundl
-        </h1>
-      </header>
-
-      {/* ── Main content ───────────────────────────────────────────────── */}
+      {/* ── Main game area ────────────────────────────────────────────────── */}
       {/*
-       * flex: 1 + minHeight: 0 lets this shrink below its content size so
-       * overflow: hidden actually clips — without minHeight: 0 the flex
-       * algorithm refuses to shrink a child below its min-content height.
+       * height: calc(100svh - 56px) clips to exactly the viewport below the
+       * header, hiding any overflow.  When the definition panel is visible it
+       * lives outside this main so the page scrolls naturally.
        */}
       <main
         style={{
@@ -183,13 +228,7 @@ export default function GamePage() {
           overflow: "hidden",
         }}
       >
-        {/* ── Board area: fills all space above the keyboard section ─── */}
-        {/*
-         * flex: 1 + minHeight: 0 on this wrapper means it takes every pixel
-         * not claimed by the bottom section. The board is centered within it
-         * so on large screens (where tiles hit their 62px max) the extra
-         * space appears as padding above and below the grid.
-         */}
+        {/* Board area: fills all space above the bottom section */}
         <div
           style={{
             flex: 1,
@@ -201,6 +240,7 @@ export default function GamePage() {
           }}
         >
           <Board
+            wordLength={wordLength}
             guesses={guesses}
             evaluations={evaluations}
             currentInput={currentInput}
@@ -217,7 +257,7 @@ export default function GamePage() {
           />
         </div>
 
-        {/* ── Bottom section: button (when game ends) + keyboard ──────── */}
+        {/* Bottom section: end-game buttons (when visible) + keyboard */}
         <div
           style={{
             flexShrink: 0,
@@ -229,33 +269,20 @@ export default function GamePage() {
             paddingTop: 8,
           }}
         >
-          {/* End-game buttons — only rendered after win or loss. */}
+          {/* End-game buttons — Explain Word (top), then Change Mode + Play Again (bottom row) */}
           {playAgainVisible && (
             <div
               style={{
                 display: "flex",
-                gap: 10,
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 8,
                 animation: "button-fade-in 400ms ease forwards",
+                width: "100%",
+                maxWidth: 340,
               }}
             >
-              <button
-                onClick={handleRestart}
-                style={{
-                  padding: "10px 24px",
-                  borderRadius: 4,
-                  border: "2px solid #6aaa64",
-                  backgroundColor: "#fff",
-                  color: "#6aaa64",
-                  fontWeight: 700,
-                  fontSize: "0.9rem",
-                  letterSpacing: "0.08em",
-                  cursor: "pointer",
-                  textTransform: "uppercase",
-                  transition: "all 0.15s",
-                }}
-              >
-                Play Again
-              </button>
+              {/* 1 — Explain Word (full width, primary) */}
               <button
                 onClick={() => {
                   if (definitionWord !== secretWord) {
@@ -265,7 +292,8 @@ export default function GamePage() {
                   }
                 }}
                 style={{
-                  padding: "10px 24px",
+                  padding: "10px 0",
+                  width: "100%",
                   borderRadius: 4,
                   border: "2px solid #6aaa64",
                   backgroundColor: "#6aaa64",
@@ -280,6 +308,48 @@ export default function GamePage() {
               >
                 Explain Word
               </button>
+
+              {/* 2 + 3 — Change Mode and Play Again side by side */}
+              <div style={{ display: "flex", gap: 8, width: "100%" }}>
+                <button
+                  onClick={onChangeMode}
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    borderRadius: 4,
+                    border: "2px solid #d3d6da",
+                    backgroundColor: "#fff",
+                    color: "#787c7e",
+                    fontWeight: 700,
+                    fontSize: "0.9rem",
+                    letterSpacing: "0.08em",
+                    cursor: "pointer",
+                    textTransform: "uppercase",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  Change Mode
+                </button>
+                <button
+                  onClick={handleRestart}
+                  style={{
+                    flex: 1,
+                    padding: "10px 0",
+                    borderRadius: 4,
+                    border: "2px solid #6aaa64",
+                    backgroundColor: "#fff",
+                    color: "#6aaa64",
+                    fontWeight: 700,
+                    fontSize: "0.9rem",
+                    letterSpacing: "0.08em",
+                    cursor: "pointer",
+                    textTransform: "uppercase",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  Play Again
+                </button>
+              </div>
             </div>
           )}
 
@@ -311,6 +381,63 @@ export default function GamePage() {
             error={defError}
           />
         </div>
+      )}
+    </>
+  )
+}
+
+// ── Page shell ────────────────────────────────────────────────────────────────
+
+export default function GamePage() {
+  const [mode, setMode] = useState<5 | 6 | null>(null)
+
+  return (
+    // Outer shell: always min-height viewport, scrollable. During play there is
+    // nothing below the keyboard so no scrollbar appears. When the definition
+    // panel is shown it extends below and the page scrolls naturally.
+    <div
+      style={{
+        minHeight: "100svh",
+        overflowY: "auto",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        backgroundColor: "#fff",
+      }}
+    >
+      {/* ── Header ───────────────────────────────────────────────────────── */}
+      <header
+        style={{
+          width: "100%",
+          borderBottom: "1px solid #d3d6da",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "0 16px",
+          height: 56,
+          flexShrink: 0,
+        }}
+      >
+        <h1
+          style={{
+            fontSize: "1.8rem",
+            fontWeight: 700,
+            letterSpacing: "0.2em",
+            textTransform: "uppercase",
+            color: "#1a1a1b",
+            margin: 0,
+            userSelect: "none",
+          }}
+        >
+          Bundl
+        </h1>
+      </header>
+
+      {/* ── Content: mode selector or active game ──────────────────────── */}
+      {mode === null ? (
+        <ModeSelect onSelect={setMode} />
+      ) : (
+        <Game wordLength={mode} onChangeMode={() => setMode(null)} />
       )}
     </div>
   )
