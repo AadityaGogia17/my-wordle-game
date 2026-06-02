@@ -7,6 +7,10 @@ export const metadata: Metadata = {
   icons: {
     icon: "/favicon.ico",
   },
+  openGraph: {
+    title: "Bundl",
+    description: "A Wordle-style word guessing game. Guess the 5-letter word in 6 tries.",
+  },
 }
 
 export const viewport: Viewport = {
