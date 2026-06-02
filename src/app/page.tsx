@@ -69,6 +69,7 @@ export default function GamePage() {
   }, [status])
 
   // Fetch definition whenever the user picks a word to explain.
+  // Calls our API route which tries dictionaryapi.dev then falls back to Merriam-Webster.
   // The cleanup cancels stale responses if the user switches words quickly.
   useEffect(() => {
     if (!definitionWord) return
@@ -76,19 +77,16 @@ export default function GamePage() {
     setDefLoading(true)
     setDefError(false)
     setDefMeanings(null)
-    fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${definitionWord}`)
+    fetch(`/api/define/${definitionWord}`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json() })
       .then((data) => {
         if (cancelled) return
-        const results: Meaning[] = []
-        for (const entry of data) {
-          for (const m of entry.meanings ?? []) {
-            const def = m.definitions?.[0]?.definition
-            if (def && results.length < 3) results.push({ partOfSpeech: m.partOfSpeech, definition: def })
-          }
+        if (data.meanings) {
+          setDefMeanings(data.meanings)
+        } else {
+          setDefMeanings(null)
+          setDefError(true)
         }
-        setDefMeanings(results.length ? results : null)
-        if (!results.length) setDefError(true)
       })
       .catch(() => { if (!cancelled) setDefError(true) })
       .finally(() => { if (!cancelled) setDefLoading(false) })
